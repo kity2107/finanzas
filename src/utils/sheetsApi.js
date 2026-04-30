@@ -76,16 +76,34 @@ async function createSpreadsheet(token) {
   return data.spreadsheetId
 }
 
+async function searchSpreadsheetInDrive(token) {
+  const q = encodeURIComponent("name='Finanzas Personal' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json()
+  return data.files?.[0]?.id || null
+}
+
 export async function findOrCreateSpreadsheet(token) {
+  // 1. Verificar caché local
   const stored = getStoredSpreadsheetId()
   if (stored) {
     const res = await fetch(`${SHEETS_API}/${stored}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) return stored
-    // Si no existe, creamos uno nuevo
     localStorage.removeItem(SPREADSHEET_KEY)
   }
+
+  // 2. Buscar en Drive por nombre (funciona cross-device)
+  const found = await searchSpreadsheetInDrive(token)
+  if (found) {
+    storeSpreadsheetId(found)
+    return found
+  }
+
+  // 3. Crear nuevo
   return createSpreadsheet(token)
 }
 
@@ -226,7 +244,24 @@ export async function deleteAhorro(token, spreadsheetId, ahorroId) {
   )
 }
 
-// ── Gastos (delete) ──────────────────────────────────────────────────────────
+// ── Gastos (update / delete) ─────────────────────────────────────────────────
+
+export async function updateExpense(token, spreadsheetId, expense) {
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/Gastos!A:F`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const rows = (await res.json()).values || []
+  const rowIndex = rows.findIndex(row => row[4] === expense.id)
+  if (rowIndex === -1) return
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Gastos!A${rowIndex + 1}:F${rowIndex + 1}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ values: [[expense.fecha, expense.categoria, expense.descripcion, expense.monto, expense.id, 'active']] }),
+    }
+  )
+}
 
 export async function deleteExpense(token, spreadsheetId, expenseId) {
   // Obtener todas las filas para encontrar la fila del gasto

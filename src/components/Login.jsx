@@ -1,7 +1,17 @@
+import logo from '../assets/devchai.png'
+
 export default function Login({ onLogin, loading, error }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
+    <div
+      className="min-h-screen flex items-center justify-center p-6"
+      style={{
+        backgroundImage: `url(${logo})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
         <div className="text-6xl mb-4">💰</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-1">Mis Finanzas</h1>
         <p className="text-gray-500 text-sm mb-8">

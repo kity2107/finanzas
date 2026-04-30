@@ -87,6 +87,13 @@ export default function App() {
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
+  const handleEditExpense = (updated) => {
+    setExpenses(prev =>
+      prev.map(e => e.id === updated.id ? updated : e)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    )
+  }
+
   const handleAddIngreso = (ingreso) => {
     setIngresos(prev => [...prev, ingreso].sort((a, b) => b.fecha.localeCompare(a.fecha)))
     setView('dashboard')
@@ -177,9 +184,12 @@ export default function App() {
         {view === 'history' && (
           <ExpenseList
             expenses={expenses}
+            ingresos={ingresos}
             token={token}
             spreadsheetId={spreadsheetId}
             onDelete={handleDeleteExpense}
+            onEdit={handleEditExpense}
+            onDeleteIngreso={(id) => setIngresos(prev => prev.filter(i => i.id !== id))}
           />
         )}
       </main>

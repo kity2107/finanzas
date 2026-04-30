@@ -1,4 +1,4 @@
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly'
 
 export function loadGoogleIdentityServices() {
   return new Promise((resolve) => {
