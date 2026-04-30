@@ -16,8 +16,9 @@ export async function ensureExtraSheets(token, spreadsheetId) {
   const existing = (data.sheets || []).map(s => s.properties.title)
 
   const needed = [
-    { title: 'Ingresos', headers: ['Fecha', 'Categoría', 'Descripción', 'Monto', 'ID', 'Estado'] },
-    { title: 'Ahorros',  headers: ['Fecha', 'Descripción', 'Monto', 'Tipo', 'Destino', 'ID', 'Estado'] },
+    { title: 'Ingresos',     headers: ['Fecha', 'Categoría', 'Descripción', 'Monto', 'ID', 'Estado'] },
+    { title: 'Ahorros',      headers: ['Fecha', 'Descripción', 'Monto', 'Tipo', 'Destino', 'ID', 'Estado'] },
+    { title: 'GastosFijos',  headers: ['Nombre', 'Categoría', 'Monto', 'DíaVencimiento', 'ID', 'Estado'] },
   ].filter(s => !existing.includes(s.title))
 
   if (needed.length === 0) return
@@ -240,6 +241,68 @@ export async function deleteAhorro(token, spreadsheetId, ahorroId) {
   if (rowIndex === -1) return
   await fetch(
     `${SHEETS_API}/${spreadsheetId}/values/Ahorros!G${rowIndex + 1}?valueInputOption=USER_ENTERED`,
+    { method: 'PUT', headers: authHeaders(token), body: JSON.stringify({ values: [['deleted']] }) }
+  )
+}
+
+// ── Gastos Fijos ─────────────────────────────────────────────────────────────
+
+export async function loadGastosFijos(token, spreadsheetId) {
+  const res = await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/GastosFijos!A2:F?majorDimension=ROWS`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const data = await res.json()
+  return (data.values || [])
+    .filter(row => row[5] !== 'deleted' && row[4])
+    .map(row => ({
+      nombre:          row[0] || '',
+      categoria:       row[1] || '',
+      monto:           parseFloat(row[2]) || 0,
+      diaVencimiento:  parseInt(row[3]) || 1,
+      id:              row[4] || '',
+    }))
+}
+
+export async function addGastoFijo(token, spreadsheetId, gasto) {
+  const id = Date.now().toString()
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/GastosFijos!A:F:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ values: [[gasto.nombre, gasto.categoria, gasto.monto, gasto.diaVencimiento, id, 'active']] }),
+    }
+  )
+  return { ...gasto, id }
+}
+
+export async function updateGastoFijo(token, spreadsheetId, gasto) {
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/GastosFijos!A:F`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const rows = (await res.json()).values || []
+  const rowIndex = rows.findIndex(row => row[4] === gasto.id)
+  if (rowIndex === -1) return
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/GastosFijos!A${rowIndex + 1}:F${rowIndex + 1}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({ values: [[gasto.nombre, gasto.categoria, gasto.monto, gasto.diaVencimiento, gasto.id, 'active']] }),
+    }
+  )
+}
+
+export async function deleteGastoFijo(token, spreadsheetId, gastoId) {
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/GastosFijos!A:F`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const rows = (await res.json()).values || []
+  const rowIndex = rows.findIndex(row => row[4] === gastoId)
+  if (rowIndex === -1) return
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/GastosFijos!F${rowIndex + 1}?valueInputOption=USER_ENTERED`,
     { method: 'PUT', headers: authHeaders(token), body: JSON.stringify({ values: [['deleted']] }) }
   )
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { loadGoogleIdentityServices, getAccessToken, getUserInfo } from './utils/googleAuth'
 import {
   findOrCreateSpreadsheet, ensureExtraSheets,
-  loadExpenses, loadIngresos, loadAhorros,
+  loadExpenses, loadIngresos, loadAhorros, loadGastosFijos,
 } from './utils/sheetsApi'
 import Login from './components/Login'
 import Header from './components/Header'
@@ -11,6 +11,7 @@ import ExpenseForm from './components/ExpenseForm'
 import IncomeForm from './components/IncomeForm'
 import SavingsForm from './components/SavingsForm'
 import ExpenseList from './components/ExpenseList'
+import FixedExpensesList from './components/FixedExpensesList'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
@@ -20,6 +21,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([])
   const [ingresos, setIngresos] = useState([])
   const [ahorros, setAhorros] = useState([])
+  const [gastosFijos, setGastosFijos] = useState([])
   const [view, setView] = useState('dashboard')
   const [addTab, setAddTab] = useState('expense')
   const [loading, setLoading] = useState(false)
@@ -58,10 +60,11 @@ export default function App() {
       const userInfo = await getUserInfo(accessToken)
       const sheetId = await findOrCreateSpreadsheet(accessToken)
       await ensureExtraSheets(accessToken, sheetId)
-      const [expData, ingData, ahoData] = await Promise.all([
+      const [expData, ingData, ahoData, fijosData] = await Promise.all([
         loadExpenses(accessToken, sheetId),
         loadIngresos(accessToken, sheetId),
         loadAhorros(accessToken, sheetId),
+        loadGastosFijos(accessToken, sheetId),
       ])
 
       setToken(accessToken)
@@ -70,6 +73,7 @@ export default function App() {
       setExpenses(expData)
       setIngresos(ingData)
       setAhorros(ahoData)
+      setGastosFijos(fijosData)
     } catch (err) {
       console.error(err)
       setError('No se pudo conectar. Verifica que el Client ID sea correcto.')
@@ -110,6 +114,7 @@ export default function App() {
     setExpenses([])
     setIngresos([])
     setAhorros([])
+    setGastosFijos([])
     setSpreadsheetId(null)
     setView('dashboard')
   }
@@ -192,6 +197,17 @@ export default function App() {
             onDeleteIngreso={(id) => setIngresos(prev => prev.filter(i => i.id !== id))}
           />
         )}
+
+        {view === 'fixed' && (
+          <FixedExpensesList
+            gastosFijos={gastosFijos}
+            token={token}
+            spreadsheetId={spreadsheetId}
+            onAdd={(g) => setGastosFijos(prev => [...prev, g])}
+            onEdit={(g) => setGastosFijos(prev => prev.map(x => x.id === g.id ? g : x))}
+            onDelete={(id) => setGastosFijos(prev => prev.filter(x => x.id !== id))}
+          />
+        )}
       </main>
 
       {/* Bottom Navigation */}
@@ -236,6 +252,19 @@ export default function App() {
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           Historial
+        </button>
+
+        <button
+          onClick={() => setView('fixed')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 text-xs font-medium transition-colors ${
+            view === 'fixed' ? 'text-emerald-600' : 'text-gray-400'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Fijos
         </button>
       </nav>
     </div>
