@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react'
 import { loadGoogleIdentityServices, getAccessToken, getUserInfo } from './utils/googleAuth'
-import { findOrCreateSpreadsheet, loadExpenses } from './utils/sheetsApi'
+import {
+  findOrCreateSpreadsheet, ensureExtraSheets,
+  loadExpenses, loadIngresos, loadAhorros,
+} from './utils/sheetsApi'
 import Login from './components/Login'
 import Header from './components/Header'
 import Dashboard from './components/Dashboard'
 import ExpenseForm from './components/ExpenseForm'
+import IncomeForm from './components/IncomeForm'
+import SavingsForm from './components/SavingsForm'
 import ExpenseList from './components/ExpenseList'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -13,7 +18,10 @@ export default function App() {
   const [token, setToken] = useState(null)
   const [spreadsheetId, setSpreadsheetId] = useState(null)
   const [expenses, setExpenses] = useState([])
+  const [ingresos, setIngresos] = useState([])
+  const [ahorros, setAhorros] = useState([])
   const [view, setView] = useState('dashboard')
+  const [addTab, setAddTab] = useState('expense')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [user, setUser] = useState(null)
@@ -23,7 +31,6 @@ export default function App() {
   useEffect(() => {
     loadGoogleIdentityServices()
 
-    // Captura el evento de instalacion del PWA (Android Chrome)
     const handler = (e) => {
       e.preventDefault()
       setInstallPrompt(e)
@@ -50,12 +57,19 @@ export default function App() {
       const accessToken = await getAccessToken(CLIENT_ID)
       const userInfo = await getUserInfo(accessToken)
       const sheetId = await findOrCreateSpreadsheet(accessToken)
-      const data = await loadExpenses(accessToken, sheetId)
+      await ensureExtraSheets(accessToken, sheetId)
+      const [expData, ingData, ahoData] = await Promise.all([
+        loadExpenses(accessToken, sheetId),
+        loadIngresos(accessToken, sheetId),
+        loadAhorros(accessToken, sheetId),
+      ])
 
       setToken(accessToken)
       setUser(userInfo)
       setSpreadsheetId(sheetId)
-      setExpenses(data)
+      setExpenses(expData)
+      setIngresos(ingData)
+      setAhorros(ahoData)
     } catch (err) {
       console.error(err)
       setError('No se pudo conectar. Verifica que el Client ID sea correcto.')
@@ -65,9 +79,7 @@ export default function App() {
   }
 
   const handleAddExpense = (expense) => {
-    setExpenses(prev =>
-      [...prev, expense].sort((a, b) => b.fecha.localeCompare(a.fecha))
-    )
+    setExpenses(prev => [...prev, expense].sort((a, b) => b.fecha.localeCompare(a.fecha)))
     setView('dashboard')
   }
 
@@ -75,10 +87,22 @@ export default function App() {
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
+  const handleAddIngreso = (ingreso) => {
+    setIngresos(prev => [...prev, ingreso].sort((a, b) => b.fecha.localeCompare(a.fecha)))
+    setView('dashboard')
+  }
+
+  const handleAddAhorro = (ahorro) => {
+    setAhorros(prev => [...prev, ahorro].sort((a, b) => b.fecha.localeCompare(a.fecha)))
+    setView('dashboard')
+  }
+
   const handleSignOut = () => {
     setToken(null)
     setUser(null)
     setExpenses([])
+    setIngresos([])
+    setAhorros([])
     setSpreadsheetId(null)
     setView('dashboard')
   }
@@ -91,7 +115,6 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col max-w-md mx-auto relative">
       <Header user={user} onSignOut={handleSignOut} />
 
-      {/* Banner de instalacion */}
       {showInstallBanner && (
         <div className="bg-emerald-500 text-white px-4 py-2.5 flex items-center justify-between gap-3">
           <span className="text-sm font-medium">Instalar app en tu celular</span>
@@ -113,14 +136,44 @@ export default function App() {
       )}
 
       <main className="flex-1 overflow-y-auto pb-24">
-        {view === 'dashboard' && <Dashboard expenses={expenses} />}
-        {view === 'add' && (
-          <ExpenseForm
-            token={token}
-            spreadsheetId={spreadsheetId}
-            onAdd={handleAddExpense}
-          />
+        {view === 'dashboard' && (
+          <Dashboard expenses={expenses} ingresos={ingresos} ahorros={ahorros} />
         )}
+
+        {view === 'add' && (
+          <div>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 bg-white px-4 pt-4">
+              {[
+                ['expense', '💸 Gasto'],
+                ['income',  '💰 Ingreso'],
+                ['savings', '🏦 Ahorro'],
+              ].map(([tab, label]) => (
+                <button
+                  key={tab}
+                  onClick={() => setAddTab(tab)}
+                  className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${
+                    addTab === tab
+                      ? 'border-emerald-500 text-emerald-600'
+                      : 'border-transparent text-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {addTab === 'expense' && (
+              <ExpenseForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddExpense} />
+            )}
+            {addTab === 'income' && (
+              <IncomeForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddIngreso} />
+            )}
+            {addTab === 'savings' && (
+              <SavingsForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddAhorro} />
+            )}
+          </div>
+        )}
+
         {view === 'history' && (
           <ExpenseList
             expenses={expenses}
