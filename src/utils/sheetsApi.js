@@ -1,5 +1,9 @@
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets'
+const DRIVE_API  = 'https://www.googleapis.com/drive/v3/files'
 const SPREADSHEET_KEY = 'finanzas_spreadsheet_id'
+const FOLDER_KEY      = 'finanzas_folder_id'
+const FOLDER_NAME     = 'Mis Finanzas'
+const SPREADSHEET_NAME = 'Finanzas Personal'
 
 function authHeaders(token) {
   return {
@@ -47,65 +51,90 @@ function storeSpreadsheetId(id) {
   localStorage.setItem(SPREADSHEET_KEY, id)
 }
 
-async function createSpreadsheet(token) {
-  const res = await fetch(SHEETS_API, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({
-      properties: { title: 'Finanzas Personal' },
-      sheets: [
-        {
-          properties: { title: 'Gastos' },
-          data: [
-            {
-              rowData: [
-                {
-                  values: ['Fecha', 'Categoría', 'Descripción', 'Monto', 'ID', 'Estado'].map(v => ({
-                    userEnteredValue: { stringValue: v },
-                    userEnteredFormat: { textFormat: { bold: true } },
-                  })),
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    }),
-  })
-  const data = await res.json()
-  storeSpreadsheetId(data.spreadsheetId)
-  return data.spreadsheetId
-}
+async function findOrCreateFolder(token) {
+  const stored = localStorage.getItem(FOLDER_KEY)
+  if (stored) return stored
 
-async function searchSpreadsheetInDrive(token) {
-  const q = encodeURIComponent("name='Finanzas Personal' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, {
+  const q = encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`)
+  const res = await fetch(`${DRIVE_API}?q=${q}&fields=files(id)&pageSize=1&orderBy=createdTime`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   const data = await res.json()
-  return data.files?.[0]?.id || null
+  if (data.files?.[0]?.id) {
+    localStorage.setItem(FOLDER_KEY, data.files[0].id)
+    return data.files[0].id
+  }
+
+  const createRes = await fetch(DRIVE_API, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+  })
+  const folder = await createRes.json()
+  localStorage.setItem(FOLDER_KEY, folder.id)
+  return folder.id
+}
+
+async function createSpreadsheet(token, folderId) {
+  // Crear via Drive API para poder especificar la carpeta
+  const res = await fetch(DRIVE_API, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      name: SPREADSHEET_NAME,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: [folderId],
+    }),
+  })
+  const file = await res.json()
+  const spreadsheetId = file.id
+
+  // Renombrar hoja default → "Gastos" y agregar encabezados
+  await fetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      requests: [{ updateSheetProperties: { properties: { sheetId: 0, title: 'Gastos' }, fields: 'title' } }],
+    }),
+  })
+  await fetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: [{ range: 'Gastos!A1', values: [['Fecha', 'Categoría', 'Descripción', 'Monto', 'ID', 'Estado']] }],
+    }),
+  })
+
+  storeSpreadsheetId(spreadsheetId)
+  return spreadsheetId
 }
 
 export async function findOrCreateSpreadsheet(token) {
-  // 1. Verificar caché local
+  // 1. Caché local
   const stored = getStoredSpreadsheetId()
   if (stored) {
-    const res = await fetch(`${SHEETS_API}/${stored}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetch(`${SHEETS_API}/${stored}`, { headers: { Authorization: `Bearer ${token}` } })
     if (res.ok) return stored
     localStorage.removeItem(SPREADSHEET_KEY)
   }
 
-  // 2. Buscar en Drive por nombre (funciona cross-device)
-  const found = await searchSpreadsheetInDrive(token)
-  if (found) {
-    storeSpreadsheetId(found)
-    return found
+  // 2. Buscar/crear carpeta "Mis Finanzas"
+  const folderId = await findOrCreateFolder(token)
+
+  // 3. Buscar spreadsheet dentro de la carpeta (el más antiguo = canónico)
+  const q = encodeURIComponent(`name='${SPREADSHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and '${folderId}' in parents and trashed=false`)
+  const res = await fetch(`${DRIVE_API}?q=${q}&fields=files(id)&pageSize=1&orderBy=createdTime`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json()
+  if (data.files?.[0]?.id) {
+    storeSpreadsheetId(data.files[0].id)
+    return data.files[0].id
   }
 
-  // 3. Crear nuevo
-  return createSpreadsheet(token)
+  // 4. Crear nuevo dentro de la carpeta
+  return createSpreadsheet(token, folderId)
 }
 
 export async function loadExpenses(token, spreadsheetId) {
