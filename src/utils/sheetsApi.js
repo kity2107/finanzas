@@ -336,6 +336,89 @@ export async function deleteGastoFijo(token, spreadsheetId, gastoId) {
   )
 }
 
+// ── Cuotas ───────────────────────────────────────────────────────────────────
+
+export async function ensureCuotasSheet(token, spreadsheetId) {
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}?fields=sheets.properties.title`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json()
+  const existing = (data.sheets || []).map(s => s.properties.title)
+  if (existing.includes('Cuotas')) return
+
+  await fetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Cuotas' } } }] }),
+  })
+  await fetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: [{ range: 'Cuotas!A1', values: [['ID', 'Descripción', 'MontoTotal', 'MontoCuota', 'CuotasTotal', 'CuotaActual', 'FechaInicio', 'Categoría', 'Estado']] }],
+    }),
+  })
+}
+
+export async function saveCuota(token, spreadsheetId, cuota) {
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Cuotas!A:I:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        values: [[
+          cuota.id,
+          cuota.descripcion,
+          cuota.montoTotal,
+          cuota.montoCuota,
+          cuota.cuotasTotal,
+          cuota.cuotaActual,
+          cuota.fechaInicio,
+          cuota.categoria,
+          cuota.estado,
+        ]],
+      }),
+    }
+  )
+}
+
+export async function getCuotas(token, spreadsheetId) {
+  const res = await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Cuotas!A2:I?majorDimension=ROWS`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const data = await res.json()
+  return (data.values || [])
+    .filter(row => row[8] !== 'deleted' && row[0])
+    .map(row => ({
+      id:          row[0] || '',
+      descripcion: row[1] || '',
+      montoTotal:  parseFloat(row[2]) || 0,
+      montoCuota:  parseFloat(row[3]) || 0,
+      cuotasTotal: parseInt(row[4]) || 0,
+      cuotaActual: parseInt(row[5]) || 0,
+      fechaInicio: row[6] || '',
+      categoria:   row[7] || '',
+      estado:      row[8] || 'activa',
+    }))
+}
+
+export async function saveGastosBatch(token, spreadsheetId, gastos) {
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Gastos!A:F:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        values: gastos.map(g => [g.fecha, g.categoria, g.descripcion, g.monto, g.id, 'active']),
+      }),
+    }
+  )
+  return gastos
+}
+
 // ── Gastos (update / delete) ─────────────────────────────────────────────────
 
 export async function updateExpense(token, spreadsheetId, expense) {

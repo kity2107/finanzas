@@ -3,6 +3,7 @@ import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import CuotasCard from './CuotasCard'
 
 const CATEGORIES = {
   'Alimentación':   { color: '#10b981', emoji: '🍔' },
@@ -20,7 +21,7 @@ function monthStr(year, month) {
   return `${year}-${String(month + 1).padStart(2, '0')}`
 }
 
-export default function Dashboard({ expenses, ingresos, ahorros }) {
+export default function Dashboard({ expenses, ingresos, ahorros, cuotas = [] }) {
   const now = new Date()
   const curMonthStr = monthStr(now.getFullYear(), now.getMonth())
 
@@ -110,6 +111,9 @@ export default function Dashboard({ expenses, ingresos, ahorros }) {
           </div>
         </div>
       </div>
+
+      {/* Compromisos de tarjeta */}
+      <CuotasCard cuotas={cuotas} />
 
       {/* Cards secundarias */}
       <div className="grid grid-cols-2 gap-3">
