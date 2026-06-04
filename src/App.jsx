@@ -3,6 +3,7 @@ import { loadGoogleIdentityServices, getAccessToken, getUserInfo } from './utils
 import {
   findOrCreateSpreadsheet, ensureExtraSheets,
   loadExpenses, loadIngresos, loadAhorros, loadGastosFijos,
+  ensureCuotasSheet, getCuotas, saveCuota, saveGastosBatch,
 } from './utils/sheetsApi'
 import Login from './components/Login'
 import Header from './components/Header'
@@ -22,6 +23,7 @@ export default function App() {
   const [ingresos, setIngresos] = useState([])
   const [ahorros, setAhorros] = useState([])
   const [gastosFijos, setGastosFijos] = useState([])
+  const [cuotas, setCuotas] = useState([])
   const [view, setView] = useState('dashboard')
   const [addTab, setAddTab] = useState('expense')
   const [loading, setLoading] = useState(false)
@@ -60,11 +62,13 @@ export default function App() {
       const userInfo = await getUserInfo(accessToken)
       const sheetId = await findOrCreateSpreadsheet(accessToken)
       await ensureExtraSheets(accessToken, sheetId)
-      const [expData, ingData, ahoData, fijosData] = await Promise.all([
+      await ensureCuotasSheet(accessToken, sheetId)
+      const [expData, ingData, ahoData, fijosData, cuotasData] = await Promise.all([
         loadExpenses(accessToken, sheetId),
         loadIngresos(accessToken, sheetId),
         loadAhorros(accessToken, sheetId),
         loadGastosFijos(accessToken, sheetId),
+        getCuotas(accessToken, sheetId),
       ])
 
       setToken(accessToken)
@@ -74,6 +78,7 @@ export default function App() {
       setIngresos(ingData)
       setAhorros(ahoData)
       setGastosFijos(fijosData)
+      setCuotas(cuotasData)
     } catch (err) {
       console.error(err)
       setError('No se pudo conectar. Verifica que el Client ID sea correcto.')
@@ -98,6 +103,48 @@ export default function App() {
     )
   }
 
+  const handleAddCuota = async ({ descripcion, monto, categoria, fecha, cuotasTotal }) => {
+    const id = Date.now().toString()
+    const montoCuota = parseFloat((monto / cuotasTotal).toFixed(2))
+    const cuota = {
+      id,
+      descripcion,
+      montoTotal: monto,
+      montoCuota,
+      cuotasTotal,
+      cuotaActual: 0,
+      fechaInicio: fecha,
+      categoria,
+      estado: 'activa',
+    }
+
+    // Generar array de N gastos, uno por mes
+    const [year, month, day] = fecha.split('-').map(Number)
+    const gastos = Array.from({ length: cuotasTotal }, (_, i) => {
+      const d = new Date(year, month - 1 + i, 1)
+      const fechaCuota = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+      return {
+        fecha: fechaCuota,
+        categoria,
+        descripcion: `${descripcion} - cuota ${i + 1}/${cuotasTotal}`,
+        monto: montoCuota,
+        id: `${id}_${i + 1}`,
+      }
+    })
+
+    try {
+      await saveCuota(token, spreadsheetId, cuota)
+      await saveGastosBatch(token, spreadsheetId, gastos)
+      setCuotas(prev => [...prev, cuota])
+      setExpenses(prev => [...prev, ...gastos].sort((a, b) => b.fecha.localeCompare(a.fecha)))
+      setView('dashboard')
+      return { success: true, count: cuotasTotal }
+    } catch (err) {
+      console.error(err)
+      return { success: false }
+    }
+  }
+
   const handleAddIngreso = (ingreso) => {
     setIngresos(prev => [...prev, ingreso].sort((a, b) => b.fecha.localeCompare(a.fecha)))
     setView('dashboard')
@@ -115,6 +162,7 @@ export default function App() {
     setIngresos([])
     setAhorros([])
     setGastosFijos([])
+    setCuotas([])
     setSpreadsheetId(null)
     setView('dashboard')
   }
@@ -149,7 +197,7 @@ export default function App() {
 
       <main className="flex-1 overflow-y-auto pb-24">
         {view === 'dashboard' && (
-          <Dashboard expenses={expenses} ingresos={ingresos} ahorros={ahorros} />
+          <Dashboard expenses={expenses} ingresos={ingresos} ahorros={ahorros} cuotas={cuotas} />
         )}
 
         {view === 'add' && (
@@ -175,7 +223,7 @@ export default function App() {
               ))}
             </div>
             {addTab === 'expense' && (
-              <ExpenseForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddExpense} />
+              <ExpenseForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddExpense} onAddCuota={handleAddCuota} />
             )}
             {addTab === 'income' && (
               <IncomeForm token={token} spreadsheetId={spreadsheetId} onAdd={handleAddIngreso} />

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { addExpense } from '../utils/sheetsApi'
 
+const CUOTAS_OPTIONS = [1, 3, 6, 12, 18, 24]
+
 const CATEGORIES = [
   'Alimentación', 'Transporte', 'Entretenimiento', 'Salud',
   'Educación', 'Hogar', 'Ropa', 'Servicios', 'Otros',
@@ -16,15 +18,18 @@ function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
 
-export default function ExpenseForm({ token, spreadsheetId, onAdd }) {
+export default function ExpenseForm({ token, spreadsheetId, onAdd, onAddCuota }) {
   const [form, setForm] = useState({
     fecha: todayStr(),
     categoria: 'Alimentación',
     descripcion: '',
     monto: '',
   })
+  const [pagoConTarjeta, setPagoConTarjeta] = useState(false)
+  const [cuotasTotal, setCuotasTotal] = useState(3)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
   const [error, setError] = useState(null)
 
   const set = (field, value) => setForm(f => ({ ...f, [field]: value }))
@@ -36,14 +41,33 @@ export default function ExpenseForm({ token, spreadsheetId, onAdd }) {
     setLoading(true)
     setError(null)
     try {
-      const expense = await addExpense(token, spreadsheetId, {
-        ...form,
-        monto: parseFloat(form.monto),
-      })
-      onAdd(expense)
-      setSuccess(true)
-      setForm({ fecha: todayStr(), categoria: 'Alimentación', descripcion: '', monto: '' })
-      setTimeout(() => setSuccess(false), 2500)
+      if (pagoConTarjeta) {
+        const result = await onAddCuota({
+          ...form,
+          monto: parseFloat(form.monto),
+          cuotasTotal,
+        })
+        if (result?.success) {
+          setSuccessMsg(`✓ ${cuotasTotal} cuota${cuotasTotal > 1 ? 's' : ''} registrada${cuotasTotal > 1 ? 's' : ''}`)
+          setSuccess(true)
+          setForm({ fecha: todayStr(), categoria: 'Alimentación', descripcion: '', monto: '' })
+          setPagoConTarjeta(false)
+          setCuotasTotal(3)
+          setTimeout(() => setSuccess(false), 2500)
+        } else {
+          setError('No se pudo guardar. Intenta de nuevo.')
+        }
+      } else {
+        const expense = await addExpense(token, spreadsheetId, {
+          ...form,
+          monto: parseFloat(form.monto),
+        })
+        onAdd(expense)
+        setSuccessMsg('✓ Gasto guardado en Google Sheets')
+        setSuccess(true)
+        setForm({ fecha: todayStr(), categoria: 'Alimentación', descripcion: '', monto: '' })
+        setTimeout(() => setSuccess(false), 2500)
+      }
     } catch (err) {
       console.error(err)
       setError('No se pudo guardar. Intenta de nuevo.')
@@ -58,7 +82,7 @@ export default function ExpenseForm({ token, spreadsheetId, onAdd }) {
 
       {success && (
         <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm text-center font-medium">
-          ✓ Gasto guardado en Google Sheets
+          {successMsg}
         </div>
       )}
       {error && (
@@ -133,6 +157,51 @@ export default function ExpenseForm({ token, spreadsheetId, onAdd }) {
           />
         </div>
 
+        {/* Pago con tarjeta */}
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div
+              onClick={() => setPagoConTarjeta(v => !v)}
+              className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${pagoConTarjeta ? 'bg-emerald-500' : 'bg-gray-200'}`}
+            >
+              <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${pagoConTarjeta ? 'translate-x-5' : 'translate-x-0'}`} />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Pago con tarjeta en cuotas</span>
+          </label>
+
+          {pagoConTarjeta && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1.5 block">Cantidad de cuotas</label>
+                <div className="flex gap-2 flex-wrap">
+                  {CUOTAS_OPTIONS.map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCuotasTotal(n)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                        cuotasTotal === n
+                          ? 'bg-emerald-500 text-white border-emerald-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      {n}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {form.monto && (
+                <p className="text-sm text-gray-500">
+                  {cuotasTotal} cuota{cuotasTotal > 1 ? 's' : ''} de{' '}
+                  <span className="font-semibold text-emerald-600">
+                    ${(parseFloat(form.monto) / cuotasTotal).toLocaleString('es', { maximumFractionDigits: 2 })}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           type="submit"
           disabled={loading}
@@ -143,7 +212,7 @@ export default function ExpenseForm({ token, spreadsheetId, onAdd }) {
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Guardando...
             </span>
-          ) : 'Guardar gasto'}
+          ) : pagoConTarjeta ? `Guardar en ${cuotasTotal} cuota${cuotasTotal > 1 ? 's' : ''}` : 'Guardar gasto'}
         </button>
       </form>
     </div>
