@@ -1,0 +1,69 @@
+schema: spec-driven
+
+context: |
+  ## Stack
+  - Vite 5 + React 18 (JSX, no TypeScript)
+  - Tailwind CSS 3 (mobile-first, max-w-md container)
+  - Recharts 2 (PieChart, BarChart)
+  - Google Identity Services (GIS) — OAuth token flow, no PKCE
+  - Google Sheets API v4 + Drive API v3 (data persistence)
+  - PWA via vite-plugin-pwa + Workbox
+
+  ## Architecture
+  - State lifted to App.jsx, passed via props
+  - API calls isolated in src/utils/sheetsApi.js
+  - Auth helpers in src/utils/googleAuth.js
+  - Soft delete: estado="deleted", filtered on load
+  - IDs: Date.now().toString()
+  - Spreadsheet ID cached in localStorage (SPREADSHEET_KEY)
+  - Bottom nav tabs: dashboard | add | history | fixed
+
+  ## Naming conventions
+  - camelCase for JS (vars, functions, props)
+  - Domain in Spanish: gasto, ingreso, ahorro, fijo
+  - Handlers: handleSubmit, handleDelete, onAdd, onEdit, onDelete
+  - Constants: UPPERCASE (SPREADSHEET_KEY, FOLDER_KEY)
+
+  ## Domain: Google Sheets structure
+  Spreadsheet name: "Finanzas Personal" (auto-created on first login)
+
+  Sheet "Gastos" — A:Fecha | B:Categoría | C:Descripción | D:Monto | E:ID | F:Estado
+    Categorías: Alimentación, Transporte, Entretenimiento, Salud, Educación, Hogar, Ropa, Servicios, Otros
+
+  Sheet "Ingresos" — A:Fecha | B:Categoría | C:Descripción | D:Monto | E:ID | F:Estado
+    Categorías: Sueldo, Freelance, Inversiones, Alquiler, Venta, Otros
+
+  Sheet "Ahorros" — A:Fecha | B:Descripción | C:Monto | D:Tipo | E:Destino | F:ID | G:Estado
+    Tipo: "deposito" | "retiro"
+    Destinos: Emergencias, Vacaciones, Auto, Casa, Educación, Inversión, Tecnología, General
+
+  Sheet "GastosFijos" — A:Nombre | B:Categoría | C:Monto | D:DíaVencimiento | E:ID | F:Estado
+    DíaVencimiento: 1–31
+    Alertas: rojo ≤3 días, amarillo ≤7 días
+
+  ## UI conventions
+  - All labels/messages in Spanish
+  - Emoji icons for categories
+  - Success/error toast messages after save
+  - Dates in YYYY-MM-DD, displayed localized
+  - Amounts as floats (ARS, no currency symbol in data)
+
+  ## Constraints
+  - No backend — browser-only, all data in Google Sheets
+  - No Anthropic/Claude API in the app
+  - No TypeScript
+  - Keep components small, single-responsibility
+  - Responsive but primarily mobile layout
+
+rules:
+  proposal:
+    - Scope to browser-only solutions (no server, no DB)
+    - Prefer extending sheetsApi.js for new data operations
+    - State changes go through App.jsx
+    - Keep UI in Spanish
+  tasks:
+    - Break into chunks of max 2 hours
+    - Include which sheet(s) are affected
+    - Note if localStorage keys change
+    - Before starting each task, create git branch named: <change-id>/<task-slug> (kebab-case, max 50 chars)
+    - Branch from main; merge back to main when task complete
