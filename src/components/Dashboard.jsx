@@ -4,6 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import CuotasCard from './CuotasCard'
+import MetaAhorroCard from './MetaAhorroCard'
 
 const CATEGORIES = {
   'Alimentación':   { color: '#10b981', emoji: '🍔' },
@@ -21,7 +22,7 @@ function monthStr(year, month) {
   return `${year}-${String(month + 1).padStart(2, '0')}`
 }
 
-export default function Dashboard({ expenses, ingresos, ahorros, cuotas = [] }) {
+export default function Dashboard({ expenses, ingresos, ahorros, cuotas = [], metaAhorro, onSaveMetaAhorro }) {
   const now = new Date()
   const curMonthStr = monthStr(now.getFullYear(), now.getMonth())
 
@@ -111,6 +112,16 @@ export default function Dashboard({ expenses, ingresos, ahorros, cuotas = [] }) 
           </div>
         </div>
       </div>
+
+      {/* Meta de ahorro */}
+      {metaAhorro && (
+        <MetaAhorroCard
+          metaAhorro={metaAhorro}
+          ingresos={ingresos}
+          ahorros={ahorros}
+          onSave={onSaveMetaAhorro}
+        />
+      )}
 
       {/* Compromisos de tarjeta */}
       <CuotasCard cuotas={cuotas} />
