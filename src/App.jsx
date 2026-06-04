@@ -16,6 +16,7 @@ import ExpenseList from './components/ExpenseList'
 import FixedExpensesList from './components/FixedExpensesList'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const META_AHORRO_KEY = 'finanzas_meta_ahorro'
 
 export default function App() {
   const [token, setToken] = useState(null)
@@ -170,6 +171,12 @@ export default function App() {
     setView('dashboard')
   }
 
+  const handleSaveMetaAhorro = ({ metaPct, sueldoBase }) => {
+    const config = { metaPct, sueldoBase }
+    localStorage.setItem(META_AHORRO_KEY, JSON.stringify(config))
+    setMetaAhorro(config)
+  }
+
   const handleSignOut = () => {
     setToken(null)
     setUser(null)
@@ -227,7 +234,14 @@ export default function App() {
 
       <main className="flex-1 overflow-y-auto pb-24">
         {view === 'dashboard' && (
-          <Dashboard expenses={expenses} ingresos={ingresos} ahorros={ahorros} cuotas={cuotas} />
+          <Dashboard
+            expenses={expenses}
+            ingresos={ingresos}
+            ahorros={ahorros}
+            cuotas={cuotas}
+            metaAhorro={metaAhorro}
+            onSaveMetaAhorro={handleSaveMetaAhorro}
+          />
         )}
 
         {view === 'add' && (
