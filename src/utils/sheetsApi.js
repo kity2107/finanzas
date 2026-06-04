@@ -4,6 +4,59 @@ const SPREADSHEET_KEY = 'finanzas_spreadsheet_id'
 const FOLDER_KEY      = 'finanzas_folder_id'
 const FOLDER_NAME     = 'Mis Finanzas'
 const SPREADSHEET_NAME = 'Finanzas Personal'
+export const GASTOS_FIJOS_MES_KEY = 'finanzas_gastos_fijos_mes'
+
+export function getMesActual() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+export async function autoGenerarGastosFijos(token, spreadsheetId, gastosFijos) {
+  const mesActual = getMesActual()
+  const [year, month] = mesActual.split('-').map(Number)
+  const ultimoDiaMes = new Date(year, month, 0).getDate()
+
+  // Leer gastos del mes actual para deduplicar por ID
+  const res = await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Gastos!A2:F?majorDimension=ROWS`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const data = await res.json()
+  const existingIds = new Set(
+    (data.values || [])
+      .filter(row => row[4] && row[0]?.startsWith(mesActual))
+      .map(row => row[4])
+  )
+
+  // Generar solo los que faltan
+  const nuevosGastos = gastosFijos
+    .filter(gf => !existingIds.has(`fijo_${gf.id}_${mesActual}`))
+    .map(gf => {
+      const dia = Math.min(gf.diaVencimiento, ultimoDiaMes)
+      return {
+        fecha: `${mesActual}-${String(dia).padStart(2, '0')}`,
+        categoria: gf.categoria,
+        descripcion: gf.nombre,
+        monto: gf.monto,
+        id: `fijo_${gf.id}_${mesActual}`,
+      }
+    })
+
+  if (nuevosGastos.length === 0) return nuevosGastos
+
+  await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/Gastos!A:F:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        values: nuevosGastos.map(g => [g.fecha, g.categoria, g.descripcion, g.monto, g.id, 'active']),
+      }),
+    }
+  )
+
+  return nuevosGastos
+}
 
 function authHeaders(token) {
   return {
