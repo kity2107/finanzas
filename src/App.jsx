@@ -4,6 +4,7 @@ import {
   findOrCreateSpreadsheet, ensureExtraSheets,
   loadExpenses, loadIngresos, loadAhorros, loadGastosFijos,
   ensureCuotasSheet, getCuotas, saveCuota, saveGastosBatch,
+  autoGenerarGastosFijos, GASTOS_FIJOS_MES_KEY, getMesActual,
 } from './utils/sheetsApi'
 import Login from './components/Login'
 import Header from './components/Header'
@@ -24,6 +25,7 @@ export default function App() {
   const [ahorros, setAhorros] = useState([])
   const [gastosFijos, setGastosFijos] = useState([])
   const [cuotas, setCuotas] = useState([])
+  const [gastosFijosGenerados, setGastosFijosGenerados] = useState(null)
   const [view, setView] = useState('dashboard')
   const [addTab, setAddTab] = useState('expense')
   const [loading, setLoading] = useState(false)
@@ -71,10 +73,23 @@ export default function App() {
         getCuotas(accessToken, sheetId),
       ])
 
+      // Auto-generar gastos fijos si el mes no fue procesado
+      let expFinal = expData
+      const mesActual = getMesActual()
+      if (localStorage.getItem(GASTOS_FIJOS_MES_KEY) !== mesActual) {
+        const generados = await autoGenerarGastosFijos(accessToken, sheetId, fijosData)
+        if (generados.length > 0) {
+          expFinal = [...expData, ...generados].sort((a, b) => b.fecha.localeCompare(a.fecha))
+          setGastosFijosGenerados(generados.length)
+          setTimeout(() => setGastosFijosGenerados(null), 4000)
+        }
+        localStorage.setItem(GASTOS_FIJOS_MES_KEY, mesActual)
+      }
+
       setToken(accessToken)
       setUser(userInfo)
       setSpreadsheetId(sheetId)
-      setExpenses(expData)
+      setExpenses(expFinal)
       setIngresos(ingData)
       setAhorros(ahoData)
       setGastosFijos(fijosData)
@@ -174,6 +189,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col max-w-md mx-auto relative">
       <Header user={user} onSignOut={handleSignOut} />
+
+      {gastosFijosGenerados >= 1 && (
+        <div className="bg-blue-500 text-white px-4 py-2.5 flex items-center justify-between gap-3">
+          <span className="text-sm font-medium">
+            Se generaron {gastosFijosGenerados} gasto{gastosFijosGenerados > 1 ? 's' : ''} fijo{gastosFijosGenerados > 1 ? 's' : ''} para{' '}
+            {new Date().toLocaleDateString('es', { month: 'long', year: 'numeric' })}
+          </span>
+          <button
+            onClick={() => setGastosFijosGenerados(null)}
+            className="text-blue-200 hover:text-white text-lg leading-none flex-shrink-0"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {showInstallBanner && (
         <div className="bg-emerald-500 text-white px-4 py-2.5 flex items-center justify-between gap-3">
