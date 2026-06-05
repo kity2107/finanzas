@@ -27,6 +27,14 @@ export default function App() {
   const [gastosFijos, setGastosFijos] = useState([])
   const [cuotas, setCuotas] = useState([])
   const [gastosFijosGenerados, setGastosFijosGenerados] = useState(null)
+  const [metaAhorro, setMetaAhorro] = useState(() => {
+    try {
+      const saved = localStorage.getItem(META_AHORRO_KEY)
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
   const [view, setView] = useState('dashboard')
   const [addTab, setAddTab] = useState('expense')
   const [loading, setLoading] = useState(false)
