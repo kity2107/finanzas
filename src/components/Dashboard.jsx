@@ -172,23 +172,21 @@ export default function Dashboard({ expenses, ingresos, ahorros, cuotas = [] }) 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-gray-700 font-semibold mb-3 text-sm">Gastos por categoría este mes</h3>
           <div className="flex items-center gap-3">
-            <ResponsiveContainer width={130} height={130}>
-              <PieChart>
-                <Pie
-                  data={byCategory}
-                  cx={60}
-                  cy={60}
-                  innerRadius={38}
-                  outerRadius={60}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {byCategory.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+            <PieChart width={130} height={130}>
+              <Pie
+                data={byCategory}
+                cx={60}
+                cy={60}
+                innerRadius={38}
+                outerRadius={60}
+                dataKey="value"
+                strokeWidth={0}
+              >
+                {byCategory.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
             <div className="flex-1 space-y-1.5 min-w-0">
               {byCategory.slice(0, 5).map(cat => (
                 <div key={cat.name} className="flex items-center justify-between gap-1">

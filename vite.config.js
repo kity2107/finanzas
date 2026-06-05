@@ -33,7 +33,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache de assets estaticos
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
